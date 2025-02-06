@@ -1,0 +1,14 @@
+[package]
+name = "luan"
+version = "1.0.0"
+edition = "2021"
+description = "nvim as lua runtime"
+repository = "https://github.com/4ngelf/luan"
+license = "MIT"
+keywords = ["lua", "neovim"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+anyhow = "1.0.95"
+lexopt = "0.3.0"
+tempfile = "3.16.0"

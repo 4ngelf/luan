@@ -2,12 +2,15 @@
 use anyhow::{bail, Result};
 use std::{ffi::OsString, path::PathBuf};
 
-pub type Arguments = Vec<OsString>;
-
 #[derive(Default, Debug)]
-pub struct ParseArgs {
+pub struct Args {
     pub action: Action,
-    pub options: Options,
+    pub lua_run_before: String,
+    pub script: ScriptSource,
+    pub script_args: Vec<OsString>,
+    // TODO: Add an option to modify neovim options?
+    #[allow(unused)]
+    pub neovim_args: Vec<OsString>,
 }
 
 #[derive(Default, Debug)]
@@ -24,29 +27,19 @@ pub enum Action {
     Version,
 }
 
-#[derive(Default, Debug)]
-pub struct Options {
-    pub lua_run_before: String,
-    pub script: ScriptSource,
-    pub script_args: Arguments,
-    // TODO: Add an option to modify neovim options?
-    #[allow(unused)]
-    pub neovim_args: Arguments,
-}
-
 /// Should we execute code from stdin or a file?
 #[derive(Default, Debug)]
 pub enum ScriptSource {
     #[default]
+    Unspecified,
     Stdin,
     File(PathBuf),
 }
 
-pub fn parse_args() -> Result<ParseArgs> {
+pub fn parse_args() -> Result<Args> {
     use lexopt::prelude::*;
 
-    let mut action = Action::Normal;
-    let mut options = Options::default();
+    let mut args = Args::default();
 
     let mut parser = lexopt::Parser::from_env();
     while let Some(arg) = parser.next()? {
@@ -55,17 +48,17 @@ pub fn parse_args() -> Result<ParseArgs> {
             Short('e') => {
                 let expr: String = parser.value()?.parse()?;
                 let statement = format!("do {expr} end\n");
-                options.lua_run_before.push_str(&statement);
+                args.lua_run_before.push_str(&statement);
             }
             Short('l') => {
                 let expr: String = parser.value()?.parse()?;
                 let statement = format!("require'{expr}'\n");
-                options.lua_run_before.push_str(&statement);
+                args.lua_run_before.push_str(&statement);
             }
 
             // Modifiers
             Short('i') | Long("interactive") => {
-                action = Action::Interactive;
+                args.action = Action::Interactive;
                 break;
             }
             Short('n') | Long("neovim-args") => {
@@ -74,17 +67,17 @@ pub fn parse_args() -> Result<ParseArgs> {
 
             // Information
             Short('v') | Long("version") => {
-                action = Action::Version;
+                args.action = Action::Version;
                 break;
             }
             Short('h') | Long("help") => {
-                action = Action::Help;
+                args.action = Action::Help;
                 break;
             }
 
             // stop handling options
             Value(source) => {
-                options.script = if source == "-" {
+                args.script = if source == "-" {
                     ScriptSource::Stdin
                 } else {
                     ScriptSource::File(PathBuf::from(source))
@@ -96,10 +89,28 @@ pub fn parse_args() -> Result<ParseArgs> {
         }
     }
 
-    // The rest are arguments for script
-    while let Ok(arg) = parser.value() {
-        options.script_args.push(arg);
+    if let ScriptSource::Unspecified = &args.script {
+        let is_terminal = is_terminal();
+        let no_statements = args.lua_run_before.is_empty();
+
+        if is_terminal && no_statements {
+            args.action = Action::Interactive;
+        }
+
+        if !is_terminal || no_statements {
+            args.script = ScriptSource::Stdin;
+        }
     }
 
-    Ok(ParseArgs { action, options })
+    // The rest are arguments for script
+    while let Ok(arg) = parser.value() {
+        args.script_args.push(arg);
+    }
+
+    Ok(args)
+}
+
+fn is_terminal() -> bool {
+    use std::io::{stdin, IsTerminal};
+    stdin().is_terminal()
 }

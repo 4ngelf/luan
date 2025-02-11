@@ -41,14 +41,16 @@ fn execution_order() -> Result {
         };
     }
 
-    assert_output!("luan",
+    assert_output!(
+        "luan",
         luan()
             .arg(LUA_PACKAGE_PATH)
             .arg("-llib")
             .args(["-e", "foo = 'luan'"])
     );
 
-    assert_output!("library",
+    assert_output!(
+        "library",
         luan()
             .arg(LUA_PACKAGE_PATH)
             .args(["-e", "foo = 'luan'"])
